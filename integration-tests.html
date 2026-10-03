@@ -1,25 +1,31 @@
-<!doctype html><html lang="de"><meta charset="utf-8"><title>Importtests</title><body><h1>Kalenderwechsel und Gruppentoggle</h1><pre id="results"></pre><iframe id="app" width="1000" height="600"></iframe><script src="js/subjects.js"></script><script>
-const output=document.getElementById('results'),key='semester-survival-v1';let phase=0;
-// Reproduce an existing installation with the wrong calendar.
-localStorage.setItem(key,JSON.stringify({events:[{title:'WRONG CALENDAR',start:1,end:2}],mappings:Survival.mappings,config:Survival.defaults,group:'all',filename:'LEVIS Stundenplan.ics',bundledVersion:'levis-2026-10-03'}));
+<!doctype html><html lang="de"><meta charset="utf-8"><title>Integrationstests</title><body><h1>Integrationstests</h1><pre id="results"></pre><iframe id="app" width="1000" height="600"></iframe><script>
+const output=document.getElementById('results'),key='semester-survival-v1';
+localStorage.setItem(key,JSON.stringify({group:'1',events:[{title:'TAMPERED CALENDAR',start:1,end:2}],config:{startDate:'1900-01-01'},mappings:[]}));
 function assert(condition,message){if(!condition)throw Error(message);}
 function pass(text){output.textContent+='PASS '+text+'\n';}
+function fail(e){output.textContent+='FAIL '+e.message;document.body.dataset.result='FAIL';}
 document.getElementById('app').onload=function(){try{
- const w=this.contentWindow,d=w.document,saved=JSON.parse(w.localStorage.getItem(key));
- if(phase===1){assert(d.querySelector('[name=study-group][value="2"]').checked,'Gruppenwahl nach Reload verloren');assert(saved.filename==='LEVIS Stundenplan (1).ics','Kalender nach Reload verloren');pass('Gruppe 2 und Kalender bleiben nach Reload erhalten');document.body.dataset.result='PASS';return;}
- assert(saved.filename==='LEVIS Stundenplan (1).ics'&&saved.events.length>1&&!saved.events.some(e=>e.title==='WRONG CALENDAR'),'Falscher Kalender wurde nicht ersetzt: '+d.getElementById('message').textContent);
- pass('Alter Kalender ersetzt: '+saved.events.length+' neue Termine');
- assert(d.querySelector('[name=study-group][value="1"]').checked,'Gruppe 1 nicht vorausgewählt');
- const expected=group=>saved.events.filter(e=>{const m=e.title.match(/Gr\.?\s*([12])/i);return !m||m[1]===group;});
+ const w=this.contentWindow,d=w.document,S=w.Survival;
+ const raw=S.parseICS(w.SURVIVAL_BUNDLED_ICS,S.defaults).events;
+ assert(raw.length===154,'Veröffentlichter Kalender fehlt');
+ assert(!d.querySelector('[data-view="settings"],input[type=file],#config-form,#delete,#reimport'),'Kalenderänderung weiterhin in UI');
+ assert(!JSON.parse(w.localStorage.getItem(key)).events,'Alter lokaler Kalender wurde behalten');pass('Kalender read-only; alte lokale Änderungen ignoriert');
+ const filtered=g=>raw.filter(e=>{const m=e.title.match(/Gr\.?\s*([12])/i);return !m||m[1]===g;});
  const total=()=>Number(d.getElementById('semester-total').textContent.match(/(\d+) total events/)[1]);
- assert(total()===expected('1').length,'Gruppe 1 hat falsche Event-Anzahl');pass('Gruppe 1: '+total()+' Termine einschließlich gemeinsamer Veranstaltungen');
- const radio=d.querySelector('[name=study-group][value="2"]');radio.click();
- assert(total()===expected('2').length,'Gruppe 2 hat falsche Event-Anzahl');assert(JSON.parse(w.localStorage.getItem(key)).group==='2','Gruppe nicht gespeichert');
- const subjects=Object.values(w.Survival.statistics(expected('2').map(e=>w.Survival.classify(e,saved.mappings)),Date.now()).subjects);
- assert(subjects.length>0,'Keine Fachstatistik');pass('Gruppe 2: '+total()+' Termine, Umschalten aktualisiert Zähler');
- d.querySelector('[data-view="calendar"]').click();assert(d.getElementById('month-grid').children.length>7,'Kalender nicht gerendert');assert(!d.querySelector('.group-toggle').closest('[hidden]'),'Toggle im Kalender verborgen');pass('Toggle auch im Kalender sichtbar');
- assert(d.querySelectorAll('#meme-board').length===1,'Doppelte Meme-IDs');assert(d.body.className==='html-style','HTML-Stil fehlt');pass('HTML-Stil und Meme-Ecke erhalten');
- phase=1;this.src='index.html?reload-test=1';
-}catch(e){output.textContent+='FAIL '+e.message;document.body.dataset.result='FAIL';}};
+ assert(total()===filtered('1').length,'Gruppe 1 falsch');d.querySelector('[name=study-group][value="2"]').click();assert(total()===filtered('2').length,'Gruppe 2 falsch');pass('Gruppenumschalter aktualisiert Termine');
+ const fixed=new Date(2026,9,3,23,59,59).getTime();
+ const c=S.coffeeStatistics(filtered('2'),S.defaults,w.SURVIVAL_COFFEE,fixed);
+ assert(c.packs===1&&c.expenseCents===900,'Cyber-Packung falsch');assert(c.savingCents===c.completedDays*380-900,'Kaffeerechnung falsch');pass('Coffee: '+c.completedDays+' Uni-Tage, '+(c.savingCents/100).toFixed(2)+' EUR Vergleichsersparnis');
+ const synthetic=[{start:new Date(2026,8,9,8).getTime(),end:new Date(2026,8,9,10).getTime()},{start:new Date(2026,8,10,8).getTime(),end:new Date(2026,8,10,10).getTime()},{start:new Date(2026,8,10,11).getTime(),end:new Date(2026,8,10,12).getTime()}];
+ const cf={oldDailyPrice:3.8,packPrice:9,purchases:[{buyer:'cyber',packs:1,date:null},{buyer:'future',packs:1,date:'2027-01-01'}]};
+ const early=S.coffeeStatistics(synthetic,S.defaults,cf,new Date(2026,8,10,11).getTime());assert(early.completedDays===0&&early.packs===1,'Unfertiger Tag/alter Tag/zukünftiger Kauf falsch');
+ assert(S.coffeeStatistics(synthetic,S.defaults,cf,new Date(2026,8,10,12).getTime()).completedDays===1,'Tag nicht ab letzter Endzeit gezählt');pass('Coffee zählt Tage einmal, erst ab letztem Ende und innerhalb des Semesters');
+ d.querySelector('[data-view="coffee"]').click();assert(d.getElementById('coffee-buyers').textContent.includes('cyber'),'Cyber fehlt auf Coffee-Seite');assert(!d.getElementById('coffee').querySelector('input,form'),'Öffentliche Kaffee-Eingabe vorhanden');pass('Coffee-Seite und Cyber-Käuferliste vorhanden; nur Dateiänderungen');
+ d.querySelector('[data-view="calendar"]').click();
+ const target=filtered('2').find(e=>{const dt=new Date(e.start);return dt.getFullYear()===new Date().getFullYear()&&dt.getMonth()===new Date().getMonth()&&e.description;});assert(target,'Kein Testtermin im aktuellen Monat');
+ d.querySelector('[data-date="'+S.dateKey(new Date(target.start))+'"]').click();
+ const details=d.querySelector('#selected-events details');assert(details,'Beschreibung fehlt');details.querySelector('summary').click();assert(details.open,'Beschreibung öffnet nicht');
+ setTimeout(()=>{try{assert(d.querySelector('#selected-events details')===details&&details.open,'Beschreibung wurde beim Tick ersetzt/geschlossen');pass('Beschreibung bleibt über Timer-Tick offen');details.querySelector('summary').click();assert(!details.open,'Beschreibung schließt nicht');setTimeout(()=>{try{assert(d.querySelector('#selected-events details')===details&&!details.open,'Geschlossene Beschreibung wurde ersetzt/geöffnet');pass('Beschreibung bleibt nach Schließen geschlossen');document.body.dataset.result='PASS';}catch(e){fail(e);}},1300);}catch(e){fail(e);}},1300);
+}catch(e){fail(e);}};
 document.getElementById('app').src='index.html';
 </script></body></html>

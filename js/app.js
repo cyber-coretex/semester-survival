@@ -1,53 +1,76 @@
 'use strict';
 (() => {
   const S=Survival,$=id=>document.getElementById(id),key='semester-survival-v1';
-  let state={events:[],mappings:S.mappings,config:S.defaults,theme:'auto',filename:''};
-  try{const saved=localStorage.getItem(key);if(saved){const parsed=JSON.parse(saved);if(!Array.isArray(parsed.events)||!Array.isArray(parsed.mappings)||!parsed.config)throw Error();state={...state,...parsed};}}catch{$('message').textContent='Gespeicherte Daten konnten nicht gelesen werden. Bitte Kalender neu importieren.';}
-  // Import this requested export once, including for an existing installation.
-  if(window.SURVIVAL_BUNDLED_ICS && state.bundledVersion!=='levis-corrected-2026-10-03'){
-    try{const parsed=S.parseICS(window.SURVIVAL_BUNDLED_ICS,state.config);state={...state,events:parsed.events,filename:'LEVIS Stundenplan (1).ics',bundledVersion:'levis-corrected-2026-10-03'};try{localStorage.setItem(key,JSON.stringify(state));}catch{$('message').textContent='Kalender geladen; Browserspeicher ist nicht verfügbar.';}}catch(err){$('message').textContent='LEVIS-Import: '+err.message;}
-  }
-  state.group = state.group === '2' ? '2' : '1';
+  // Only the published source defines calendar, mappings, semester and coffee log.
+  // localStorage keeps the visitor's group preference, never a mutable calendar.
+  let group='1';
+  try{const saved=JSON.parse(localStorage.getItem(key)||'{}');group=saved.group==='2'?'2':'1';}catch{}
+  const config={...S.defaults},mappings=S.mappings;
+  let rawEvents=[];
+  try{rawEvents=S.parseICS(window.SURVIVAL_BUNDLED_ICS,config).events;}catch(err){$('message').textContent='Der veröffentlichte Kalender konnte nicht geladen werden: '+err.message;}
   let events=[],month=new Date(),selected=S.dateKey(new Date()),view='dashboard';month.setDate(1);
-  function notify(text){$('message').textContent=text;}
-  function save(next){try{localStorage.setItem(key,JSON.stringify(next));state=next;return true;}catch{notify('Speichern nicht möglich. Bitte lokalen HTTP-Server verwenden oder Browserspeicher freigeben.');return false;}}
-  function remap(){events=state.events.filter(e=>{const group=e.title.match(/Gr\.?\s*([12])/i);return !state.group||state.group==='all'||!group||group[1]===state.group;}).map(e=>S.classify(e,state.mappings));}
+  const money=cents=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(cents/100);
+  function remap(){events=rawEvents.filter(e=>{const match=e.title.match(/Gr\.?\s*([12])/i);return !match||match[1]===group;}).map(e=>S.classify(e,mappings));}
   function dayEvents(day){return events.filter(e=>S.dateKey(new Date(e.start))===day);}
-  function eventHTML(list,now){return list.length?list.map(e=>`<div class="event ${e.end<=now?'past':e.start<=now?'active':''}"><span>${e.end<=now?'[x]':e.start<=now?'[&gt;]':'[ ]'}</span><span>${S.time(e.start)}–${S.time(e.end)}</span><div>${S.escape(e.subject)} · ${e.type}<span class="detail">${S.escape(e.title)}${e.location?' · '+S.escape(e.location):''}</span>${e.description?`<details><summary>Beschreibung</summary><span class="detail">${S.escape(e.description)}</span></details>`:''}</div></div>`).join(''):'<p>Keine Lehrveranstaltungen.</p>';}
+  function status(event,now){return event.end<=now?'past':event.start<=now?'active':'future';}
+  function eventHTML(list,now){return list.length?list.map(e=>`<div class="event ${status(e,now)}"><span>${e.end<=now?'[x]':e.start<=now?'[&gt;]':'[ ]'}</span><span>${S.time(e.start)}–${S.time(e.end)}</span><div>${S.escape(e.subject)} · ${e.type}<span class="detail">${S.escape(e.title)}${e.location?' · '+S.escape(e.location):''}</span>${e.description?`<details data-event-id="${S.escape(e.id)}"><summary>Beschreibung auf / zu</summary><span class="detail">${S.escape(e.description)}</span></details>`:''}</div></div>`).join(''):'<p>Keine Lehrveranstaltungen. Der Server empfiehlt: existieren.</p>';}
+  // Update only when event content/status changes, and retain expanded descriptions.
+  function renderEvents(container,list,now){
+    const signature=JSON.stringify(list.map(e=>[e.id,status(e,now),e.title,e.description,e.location,e.subject,e.type]));
+    if(container.dataset.signature===signature)return;
+    const open=new Set([...container.querySelectorAll('details[open]')].map(d=>d.dataset.eventId));
+    container.innerHTML=eventHTML(list,now);container.dataset.signature=signature;
+    container.querySelectorAll('details').forEach(d=>d.open=open.has(d.dataset.eventId));
+  }
   function renderCalendar(now){
     $('month-title').textContent=month.toLocaleDateString('de-DE',{month:'long',year:'numeric'});
     const year=month.getFullYear(),mo=month.getMonth(),offset=(month.getDay()+6)%7,total=new Date(year,mo+1,0).getDate();
-    let html=['Mo','Di','Mi','Do','Fr','Sa','So'].map(d=>`<div class="weekday">${d}</div>`).join('')+'<div></div>'.repeat(offset);
-    for(let d=1;d<=total;d++){const date=S.dateKey(new Date(year,mo,d)),list=dayEvents(date);html+=`<button data-date="${date}" aria-label="${date}, ${list.length} Termine" class="${list.length?'has-events ':''}${date===selected?'selected ':''}${date===S.dateKey(new Date(now))?'today':''}">${d}${list.length?`<small>${list.length} Termine</small>`:''}</button>`;}
-    $('month-grid').innerHTML=html;$('selected-date').textContent=new Date(selected+'T12:00:00').toLocaleDateString('de-DE',{dateStyle:'full'});$('selected-events').innerHTML=eventHTML(dayEvents(selected),now);
+    const signature=[year,mo,group,selected,S.dateKey(new Date(now))].join('|');
+    if($('month-grid').dataset.signature!==signature){
+      let html=['Mo','Di','Mi','Do','Fr','Sa','So'].map(d=>`<div class="weekday">${d}</div>`).join('')+'<div></div>'.repeat(offset);
+      for(let d=1;d<=total;d++){const date=S.dateKey(new Date(year,mo,d)),list=dayEvents(date);html+=`<button data-date="${date}" aria-label="${date}, ${list.length} Termine" class="${list.length?'has-events ':''}${date===selected?'selected ':''}${date===S.dateKey(new Date(now))?'today':''}">${d}${list.length?`<small>${list.length} Termine</small>`:''}</button>`;}
+      $('month-grid').innerHTML=html;$('month-grid').dataset.signature=signature;
+    }
+    $('selected-date').textContent=new Date(selected+'T12:00:00').toLocaleDateString('de-DE',{dateStyle:'full'});renderEvents($('selected-events'),dayEvents(selected),now);
+  }
+  function renderCoffee(now){
+    const coffee=window.SURVIVAL_COFFEE,c=S.coffeeStatistics(events,config,coffee,now);
+    $('coffee-savings').textContent=money(c.savingCents);
+    $('coffee-days').textContent=`${c.completedDays} abgeschlossene Uni-Tage in Gruppe ${group}`;
+    $('coffee-formula').textContent=`${c.completedDays} × ${money(Math.round(coffee.oldDailyPrice*100))} − ${c.packs} × ${money(Math.round(coffee.packPrice*100))} = ${money(c.savingCents)}`;
+    $('coffee-costs').innerHTML=`<p>Früher: <strong>${money(c.formerCostCents)}</strong> pro Person für Kaffee an den vergangenen Uni-Tagen.</p><p>Gemeinschaftskaffee: <strong>${money(c.expenseCents)}</strong> tatsächliche Gesamtausgaben für ${c.packs} Packung(en) à ${coffee.packGrams} g.</p><p>Semester insgesamt: ${c.totalDays} Uni-Tage × ${money(Math.round(coffee.oldDailyPrice*100))} = <strong>${money(c.semesterBaselineCents)}</strong> frühere Kosten pro Person. Künftige Packungen sind noch nicht eingerechnet.</p>`;
+    $('coffee-buyers').innerHTML=coffee.purchases.map((p,i)=>`<tr><td>${i+1}</td><td>${S.escape(p.buyer)}</td><td>${p.date?S.escape(new Date(p.date+'T12:00:00').toLocaleDateString('de-DE')):'Noch nicht angegeben'}</td><td>${p.packs} × ${coffee.packGrams} g</td><td>${money(p.packs*Math.round(coffee.packPrice*100))}</td></tr>`).join('');
+    const counts=new Map();for(const p of c.purchases)counts.set(p.buyer,(counts.get(p.buyer)||0)+p.packs);
+    $('coffee-hall').innerHTML=[...counts].map(([buyer,packs])=>`<span class="buyer-badge">☕ ${S.escape(buyer)} · ${packs} Packung(en)</span>`).join('')||'Noch keine Packung gekauft.';
   }
   function render(now=Date.now()){
     const today=dayEvents(S.dateKey(new Date(now))),day=S.dayState(today,now),stats=S.statistics(events,now);
-    S.applyDesign(state.config,state.theme,now);
+    S.applyDesign(config,'auto',now);
     $('today').textContent=new Date(now).toLocaleDateString('de-DE',{dateStyle:'full'});
-    $('timer-label').textContent=events.length?day.label:'KALENDER IMPORTIEREN';$('timer').textContent=events.length?day.timer:'--:--:--';
-    $('timer-note').textContent=events.length?'ANOTHER DAY CLOSER TO FREEDOM.':'Unter Settings deinen Semester-Stundenplan als ICS-Datei importieren.';
+    $('timer-label').textContent=events.length?day.label:'KALENDER NICHT VERFÜGBAR';$('timer').textContent=events.length?day.timer:'--:--:--';
+    $('timer-note').textContent='BITTE WARTEN. IHRE MOTIVATION WIRD GESUCHT ...';
     $('day-progress').value=day.percent;$('day-percent').textContent=`${Math.floor(day.percent)}% COMPLETE`;
-    // Rebuild only when event status changes, preserving opened descriptions.
-    const signature=today.map(e=>e.id+':'+(e.end<=now?'past':e.start<=now?'active':'future')).join('|');
-    if($('today-events').dataset.signature!==signature||!$('today-events').innerHTML){$('today-events').innerHTML=eventHTML(today,now);$('today-events').dataset.signature=signature;}
-    $('day-end').textContent=day.last?'END OF DAY: '+S.time(day.last):'';
+    renderEvents($('today-events'),today,now);$('day-end').textContent=day.last?'END OF DAY: '+S.time(day.last):'';
     const percent=stats.total?Math.round(stats.past/stats.total*100):0;$('semester-progress').value=percent;$('semester-total').textContent=`${percent}% · ${stats.past} survived · ${stats.total-stats.past} remaining · ${stats.total} total events`;
-    $('subjects').innerHTML=Object.entries(stats.subjects).map(([subject,types])=>`<div class="card"><h3>${S.escape(subject)}</h3>${Object.entries(types).filter(([type,v])=>v.total||type!=='OTHER').map(([type,v])=>`<p><strong>${type}</strong><br>${v.past} / ${v.total} survived<br>${v.total-v.past} remaining</p>`).join('')}</div>`).join('')||'<p>Noch kein Stundenplan importiert.</p>';
-    $('stats').innerHTML=`<p>Uni-Tage: ${stats.days} gesamt · ${stats.pastDays} überstanden · ${stats.days-stats.pastDays} verbleibend</p><p>Events: ${stats.total} gesamt · ${stats.past} überstanden · ${stats.total-stats.past} verbleibend</p><div class="table-scroll"><table><thead><tr><th>Fach</th><th>Gesamt</th><th>VL gesamt / übrig</th><th>UE gesamt / übrig</th><th>Sonstige gesamt / übrig</th></tr></thead><tbody>${Object.entries(stats.subjects).map(([subject,t])=>`<tr><td>${S.escape(subject)}</td><td>${Object.values(t).reduce((sum,v)=>sum+v.total,0)}</td>${['VL','UE','OTHER'].map(type=>`<td>${t[type].total} / ${t[type].total-t[type].past}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    // Semester numbers only change at event endings or when switching groups.
+    const statsSignature=group+'|'+stats.past;
+    if($('subjects').dataset.signature!==statsSignature){
+      $('subjects').dataset.signature=statsSignature;
+      $('subjects').innerHTML=Object.entries(stats.subjects).map(([subject,types])=>`<div class="card"><h3>${S.escape(subject)}</h3>${Object.entries(types).filter(([type,v])=>v.total||type!=='OTHER').map(([type,v])=>`<p><strong>${type}</strong><br>${v.past} / ${v.total} survived<br>${v.total-v.past} remaining</p>`).join('')}</div>`).join('')||'<p>Noch kein veröffentlichter Stundenplan.</p>';
+      $('stats').innerHTML=`<p>Uni-Tage: ${stats.days} gesamt · ${stats.pastDays} überstanden · ${stats.days-stats.pastDays} verbleibend</p><p>Events: ${stats.total} gesamt · ${stats.past} überstanden · ${stats.total-stats.past} verbleibend</p><div class="table-scroll"><table><thead><tr><th>Fach</th><th>Gesamt</th><th>VL gesamt / übrig</th><th>UE gesamt / übrig</th><th>Sonstige gesamt / übrig</th></tr></thead><tbody>${Object.entries(stats.subjects).map(([subject,t])=>`<tr><td>${S.escape(subject)}</td><td>${Object.values(t).reduce((sum,v)=>sum+v.total,0)}</td>${['VL','UE','OTHER'].map(type=>`<td>${t[type].total} / ${t[type].total-t[type].past}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    }
     if(view==='calendar')renderCalendar(now);
+    if(view==='coffee')renderCoffee(now);
   }
-  function form(){ $('start-date').value=state.config.startDate;$('end-date').value=state.config.endDate;$('weeks').value=state.config.totalWeeks;document.querySelectorAll('[name=study-group]').forEach(input=>input.checked=input.value===state.group);$('mapping').value=JSON.stringify(state.mappings,null,2);$('import-info').textContent=state.filename?`${state.filename} · ${state.events.length} Termine gespeichert · ${events.length} nach Gruppenfilter`: 'Kein Kalender gespeichert.';}
+  function syncGroup(){document.querySelectorAll('[name=study-group]').forEach(input=>input.checked=input.value===group);}
   document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>{view=button.dataset.view;document.querySelectorAll('main > section').forEach(section=>section.hidden=section.id!==view);document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-current',b===button?'page':'false'));render();}));
   document.querySelectorAll('[name=study-group]').forEach(input=>input.addEventListener('change',()=>{
-    if(save({...state,group:input.value})){remap();form();$('today-events').dataset.signature='';render();}else{form();}
+    group=input.value;try{localStorage.setItem(key,JSON.stringify({group}));}catch{$('message').textContent='Gruppenwahl gilt für diesen Besuch; Browserspeicher ist nicht verfügbar.';}remap();syncGroup();render();
   }));
-  $('file').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>10*1024*1024)throw Error('Datei zu groß (maximal 10 MB).');const parsed=S.parseICS(await file.text(),state.config);if(!parsed.events.length)throw Error('Keine zeitgebundenen Lehrveranstaltungen gefunden.');if(save({...state,events:parsed.events,filename:file.name})){remap();$('today-events').dataset.signature='';form();render();notify(`${parsed.events.length} Termine importiert.${parsed.skipped?' '+parsed.skipped+' ganztägige Termine ausgelassen.':''}`);}}catch(err){notify('Import fehlgeschlagen: '+err.message);}finally{e.target.value='';}});
-  $('reimport').onclick=()=>$('file').click();
-  $('delete').onclick=()=>{if(!confirm('Importierten Kalender und alle Einstellungen löschen?'))return;try{localStorage.removeItem(key);state={events:[],mappings:S.mappings,config:S.defaults,theme:'auto',filename:'',bundleDisabled:true,bundledVersion:'levis-corrected-2026-10-03',group:state.group};localStorage.setItem(key,JSON.stringify(state));remap();form();render();notify('Alle gespeicherten App-Daten gelöscht. Automatischer LEVIS-Import deaktiviert.');}catch{notify('Browserspeicher konnte nicht gelöscht werden.');}};
-  $('config-form').onsubmit=e=>{e.preventDefault();try{const mappings=JSON.parse($('mapping').value);if(!Array.isArray(mappings)||mappings.some(m=>typeof m.subject!=='string'||!m.subject.trim()||!Array.isArray(m.patterns)||!m.patterns.length||m.patterns.some(p=>typeof p!=='string'||!p.trim())))throw Error('Mapping benötigt subject und eine Liste nicht leerer patterns.');const config={startDate:$('start-date').value,endDate:$('end-date').value,totalWeeks:Number($('weeks').value)};if(config.endDate<config.startDate)throw Error('Semesterende muss nach Semesterbeginn liegen.');if(save({...state,mappings,config,group:state.group})){remap();form();$('today-events').dataset.signature='';render();notify('Einstellungen gespeichert. Bei geändertem Semesterende unbefristete Serien bitte erneut importieren.');}}catch(err){notify(err.message);}};
   $('prev-month').onclick=()=>{month.setMonth(month.getMonth()-1);renderCalendar(Date.now());};$('next-month').onclick=()=>{month.setMonth(month.getMonth()+1);renderCalendar(Date.now());};
   $('month-grid').onclick=e=>{const b=e.target.closest('[data-date]');if(b){selected=b.dataset.date;renderCalendar(Date.now());}};
-  $('meme-board').innerHTML=(window.SURVIVAL_MEMES||[]).length ? window.SURVIVAL_MEMES.map(m=>`<figure><img src="${S.escape(m.file)}" alt="${S.escape(m.caption||'Uni-Meme')}" loading="lazy"><figcaption>${S.escape(m.caption||'')}</figcaption></figure>`).join('') : '<div class="meme-empty">[ hier bald fragwürdige memes ]<br><br>Bilder in den Ordner memes legen und in js/memes.js eintragen.</div>';
-  remap();form();render();document.querySelector('[data-view="dashboard"]').setAttribute('aria-current','page');setInterval(()=>render(),1000);
+  $('meme-board').innerHTML=(window.SURVIVAL_MEMES||[]).length ? window.SURVIVAL_MEMES.map(m=>`<figure><img src="${S.escape(m.file)}" alt="${S.escape(m.caption||'Uni-Meme')}" loading="lazy"><figcaption>${S.escape(m.caption||'')}</figcaption></figure>`).join('') : '<div class="meme-empty"><pre>  __________________\n /  hirn.exe fehlt  \\\n |   ( x _ x )      |\n \\__________________/</pre>Weitere kulturelle Tiefpunkte folgen.</div>';
+  // Drop legacy editable data so old browser imports cannot override the source.
+  try{localStorage.setItem(key,JSON.stringify({group}));}catch{}
+  remap();syncGroup();render();document.querySelector('[data-view="dashboard"]').setAttribute('aria-current','page');setInterval(()=>render(),1000);
 })();

@@ -1,30 +1,42 @@
 # Semester Survival
 
-`index.html` im Browser öffnen. Der mitgelieferte LEVIS-Stundenplan wird beim ersten Aufruf automatisch importiert und gespeichert. Unter **Settings** lassen sich Kalender austauschen und den Stundenplan bearbeiten. Oben auf jeder Ansicht zwischen Gruppe 1 und Gruppe 2 umschalten; die Wahl wird gespeichert. Kein Build, keine Abhängigkeiten, keine Netzwerkzugriffe. Kalender, Mapping, Semesterdaten und Designauswahl bleiben im lokalen Browserspeicher.
+index.html direkt öffnen. Statische Website mit veröffentlichtem LEVIS-Kalender, Gruppenumschalter, Countdown, Kalender, Statistiken und Coffee-Seite. Browserbesucher können Kalender, Fächer-Mapping und Semesterkonfiguration nicht über die Seite ändern. Kalender und Konfiguration kommen bei jedem Start aus den veröffentlichten Dateien; alte localStorage-Importe werden ignoriert. Gespeichert wird nur die Gruppenwahl.
 
-Falls der Browser localStorage für lokale Dateien blockiert, in diesem Ordner `python -m http.server 8080` starten und `http://localhost:8080` öffnen. Speicher ist pro Browser und Adresse getrennt.
+## Kalender ändern – nur als Repository-Eigentümer
 
-## Konfiguration
+Im WebsiteUni-Ordner in PowerShell:
 
-Semesterbeginn, -ende, Wochenanzahl und Fächer-Mapping unter Settings bearbeiten. Die Standardwerte stehen in `js/subjects.js`. Unbekannte Fächer werden ebenfalls angezeigt. VL/VO zählen als VL; UE/Übung/Labor/PR als UE; andere Termine als OTHER. Alle zeitgebundenen Kalendertermine werden gezählt: bitte einen Kalender mit den gewünschten Lehrveranstaltungen exportieren.
+    .\Import-Kalender.ps1 -CalendarPath "C:\Users\arnol\Downloads\Neuer Stundenplan.ics"
 
-Das Design bleibt eine helle, einfache HTML-Homepage. Die Sonne steigt abhängig vom konfigurierten Semesterbeginn und -ende langsam über den Horizont. Das ist Zeitfortschritt; die Event-Zähler berechnen sich unabhängig davon. Eigene Memes im Ordner `memes` ablegen und in `js/memes.js` eintragen.
+Anschließend index.html prüfen, Änderungen committen und pushen. Semesterbeginn, Ende und Mapping in js/subjects.js ändern. Aktuell beginnt das Semester passend zum ersten aktuellen Unterrichtstag am 10.09.2026 und endet am 31.01.2027.
 
-## Kalenderunterstützung
+Das ist eine statische Website: Repository-Schreibrechte bestimmen, wer den veröffentlichten Stand ändern kann. Es gibt kein Browser-Adminpasswort und keine Editieroberfläche. Benutzer können mit Entwicklertools ihre eigene Seitenansicht manipulieren, aber dadurch keine veröffentlichten Daten ändern.
 
-ICS mit gefalteten Zeilen, Text-Escapes, DTSTART, DTEND oder DURATION, SUMMARY, DESCRIPTION und LOCATION. Lokale Zeiten, UTC (`Z`) und IANA-TZID wie Europe/Berlin werden unterstützt. Wiederholungen: DAILY, WEEKLY (BYDAY, WKST), MONTHLY (positive BYMONTHDAY), YEARLY, INTERVAL, COUNT, UNTIL; außerdem EXDATE, RDATE und RECURRENCE-ID einschließlich Absagen. Nicht unterstützte Regeln werden mit einer Fehlermeldung abgewiesen, statt unbemerkt falsch gezählt zu werden. Proprietäre Zeitzonennamen bitte beim Export in UTC umwandeln. Ganztägige Termine werden ausgelassen. Unbefristete Serien werden bis zum konfigurierten Semesterende aufgelöst; nach Änderung dieses Datums neu importieren. Höchstens 30.000 Termine und 10 MB pro Datei.
+## Kaffeekauf hinzufügen – nur als Repository-Eigentümer
 
-Der Tagesplan ordnet Termine ihrem lokalen Startdatum zu; Termine über Mitternacht bleiben beim Starttag. Eine Veranstaltung zählt ab ihrer Endzeit als überstanden. Pausen zählen zur Tagesdauer. Kalenderimport ersetzt den vorherigen Kalender erst nach erfolgreicher Analyse und Speicherung.
+js/coffee.js bearbeiten. Beispiel für die purchases-Liste:
 
-## Dateien
+    purchases: [
+      { buyer: 'cyber', date: null, packs: 1 },
+      { buyer: 'Name', date: '2026-10-10', packs: 1 }
+    ]
 
-- `js/calendar.js`: ICS-Parser und Wiederholungen
-- `js/countdown.js`: Tageszustand und Countdown
-- `js/statistics.js`: Fach-, Event- und Tageszähler
-- `js/designEvolution.js`: Semesterwoche und Sonnenaufgang
-- `js/app.js`: UI und Speicherung
-- `css/`: Grundlayout und heller HTML-Stil
+Datum YYYY-MM-DD, packs = Anzahl der gekauften 250-g-Packungen. Jede kostet 9 EUR. Cyber ist als erster Käufer mit einer Packung eingetragen; das echte Kaufdatum ist unbekannt, daher null. Danach committen/pushen. Alle Besucher sehen nach dem Laden denselben veröffentlichten Käuferstand. Es gibt keine öffentliche Eingabe.
 
-`tests.html` im Browser öffnen, um die automatischen Logiktests auszuführen.
+## Kaffeerechnung
 
-Der korrigierte LEVIS-Export „LEVIS Stundenplan (1).ics“ ersetzt beim nächsten Öffnen einmalig den zuvor eingebetteten falschen Kalender, auch in bestehenden Browserinstallationen. Termine behalten ihre tatsächlichen Daten. Gemeinsame Veranstaltungen sind in beiden Gruppen sichtbar; Tagesplan, Countdown, Kalender und Statistiken berücksichtigen die ausgewählte Gruppe.
+Vergangene abgeschlossene Uni-Tage innerhalb des Semesters und der ausgewählten Gruppe × 3,80 EUR, minus bereits gekaufte Packungen × 9 EUR. Ein Tag zählt erst ab dem Ende seines letzten Termins. Zukünftige Kaufdaten zählen nicht als bisherige Ausgaben. Alte Kalendertermine außerhalb des konfigurierten Semesters werden für Kaffee nicht gezählt.
+
+Der historische Preis ist pro Person, die Packungskosten gelten für die Gemeinschaft. Die Anzeige zieht zur Orientierung die gesamten Gemeinschaftskosten von der früheren Ausgabe einer Person ab. Eine echte gesamte Gruppenersparnis braucht die Anzahl der Kaffeetrinker. Die Semesterhochrechnung zeigt nur die früheren Gesamtkosten (Uni-Tage × 3,80 EUR); zukünftige Kosten sind ohne Verbrauchsdaten nicht seriös prognostizierbar. Es werden keine Tassenanzahl und keine Reichweite einer Packung erfunden.
+
+## Memes
+
+Bilder in memes ablegen, Einträge in js/memes.js ergänzen. Keine externen Requests oder Frameworks. Der Sonnenaufgang folgt der Semesterzeit. Beschreibungen bleiben auch bei Timeraktualisierungen offen und lassen sich wieder schließen.
+
+## Veröffentlichung
+
+Inhalt auf GitHub pushen. Repository Settings → Pages → Deploy from a branch → main → / (root). bundledCalendar.js enthält den öffentlich sichtbaren Kalender. Nur du mit Repository-Schreibrechten veröffentlichst Änderungen. Import-Kalender.ps1 und Tests werden zum Betrieb nicht benötigt.
+
+## Tests
+
+tests.html enthält Countdown-/ICS-Tests. integration-tests.html prüft Gruppenfilter, Schutz vor alten lokalen Kalenderdaten, stabile Beschreibungen und Coffee-Berechnung. Integrationstests lokal mit separatem Browserprofil ausführen: sie ändern die lokale Gruppenwahl zu Testzwecken.

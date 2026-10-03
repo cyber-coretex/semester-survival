@@ -1,6 +1,6 @@
 'use strict';
 window.Survival = {
-  defaults: { startDate: '2026-09-14', endDate: '2027-01-31', totalWeeks: 20 },
+  defaults: { startDate: '2026-09-10', endDate: '2027-01-31', totalWeeks: 20 },
   mappings: [ {patterns:['SWC3','Software Construction'],subject:'C++'}, {patterns:['MAS3','Mathematik','Mathe'],subject:'Mathematik'}, {patterns:['UX','Usability'],subject:'Usability'} ],
   classify(event, mappings) {
     const text = event.title + ' ' + event.description;
