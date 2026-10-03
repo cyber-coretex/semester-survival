@@ -1,3 +1,2 @@
-// Add local files to the memes folder, then list them here.
-// Example: { file: 'memes/mathe.jpg', caption: 'Ich nach einer UE.' }
+// Additional images can be listed here. The beer GIF now spins beside the page.
 window.SURVIVAL_MEMES = [];

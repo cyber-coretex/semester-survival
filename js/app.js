@@ -46,6 +46,17 @@
   function render(now=Date.now()){
     const today=dayEvents(S.dateKey(new Date(now))),day=S.dayState(today,now),stats=S.statistics(events,now);
     S.applyDesign(config,'auto',now);
+    const weeks=S.remainingWeeks(events,config,now);
+    $('weekends-left').textContent=weeks.weekends;
+    $('calendar-weeks-left').textContent=`${weeks.calendarWeeks} Wochen bis Semesterende (${weeks.calendarDays} Tage)`;
+    const lesson=S.lessonState(events,now);
+    $('lesson-label').textContent=lesson.label;
+    const lessonSignature=lesson.label+'|'+lesson.items.map(item=>item.event.id).join('|');
+    if($('lesson-timers').dataset.signature!==lessonSignature){
+      $('lesson-timers').dataset.signature=lessonSignature;
+      $('lesson-timers').innerHTML=lesson.items.length?lesson.items.map(item=>`<div class="lesson-item"><strong class="lesson-time"></strong><span>${S.escape(item.event.subject)} · ${item.event.type} · bis ${S.time(item.event.end)}</span></div>`).join(''):'<p>hirn.exe kann kurz runterfahren.</p>';
+    }
+    $('lesson-timers').querySelectorAll('.lesson-time').forEach((timer,index)=>timer.textContent=lesson.items[index].timer);
     $('today').textContent=new Date(now).toLocaleDateString('de-DE',{dateStyle:'full'});
     $('timer-label').textContent=events.length?day.label:'KALENDER NICHT VERFÜGBAR';$('timer').textContent=events.length?day.timer:'--:--:--';
     $('timer-note').textContent='BITTE WARTEN. IHRE MOTIVATION WIRD GESUCHT ...';
@@ -69,7 +80,16 @@
   }));
   $('prev-month').onclick=()=>{month.setMonth(month.getMonth()-1);renderCalendar(Date.now());};$('next-month').onclick=()=>{month.setMonth(month.getMonth()+1);renderCalendar(Date.now());};
   $('month-grid').onclick=e=>{const b=e.target.closest('[data-date]');if(b){selected=b.dataset.date;renderCalendar(Date.now());}};
-  $('meme-board').innerHTML=(window.SURVIVAL_MEMES||[]).length ? window.SURVIVAL_MEMES.map(m=>`<figure><img src="${S.escape(m.file)}" alt="${S.escape(m.caption||'Uni-Meme')}" loading="lazy"><figcaption>${S.escape(m.caption||'')}</figcaption></figure>`).join('') : '<div class="meme-empty"><pre>  __________________\n /  hirn.exe fehlt  \\\n |   ( x _ x )      |\n \\__________________/</pre>Weitere kulturelle Tiefpunkte folgen.</div>';
+  $('tear-week').addEventListener('click',()=>{
+    const sheet=$('tear-week');
+    if(sheet.classList.contains('tearing'))return;
+    sheet.classList.add('tearing');
+    // Cosmetic only: a click never changes the actual remaining weekends.
+    setTimeout(()=>sheet.classList.remove('tearing'),650);
+  });
+  const memes=window.SURVIVAL_MEMES||[];
+  $('meme-section').hidden=!memes.length;
+  $('meme-board').innerHTML=memes.map(m=>`<figure><img src="${S.escape(m.file)}" alt="Uni-Meme" loading="lazy"></figure>`).join('');
   // Drop legacy editable data so old browser imports cannot override the source.
   try{localStorage.setItem(key,JSON.stringify({group}));}catch{}
   remap();syncGroup();render();document.querySelector('[data-view="dashboard"]').setAttribute('aria-current','page');setInterval(()=>render(),1000);
