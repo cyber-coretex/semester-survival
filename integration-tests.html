@@ -1,0 +1,25 @@
+<!doctype html><html lang="de"><meta charset="utf-8"><title>Importtests</title><body><h1>Kalenderwechsel und Gruppentoggle</h1><pre id="results"></pre><iframe id="app" width="1000" height="600"></iframe><script src="js/subjects.js"></script><script>
+const output=document.getElementById('results'),key='semester-survival-v1';let phase=0;
+// Reproduce an existing installation with the wrong calendar.
+localStorage.setItem(key,JSON.stringify({events:[{title:'WRONG CALENDAR',start:1,end:2}],mappings:Survival.mappings,config:Survival.defaults,group:'all',filename:'LEVIS Stundenplan.ics',bundledVersion:'levis-2026-10-03'}));
+function assert(condition,message){if(!condition)throw Error(message);}
+function pass(text){output.textContent+='PASS '+text+'\n';}
+document.getElementById('app').onload=function(){try{
+ const w=this.contentWindow,d=w.document,saved=JSON.parse(w.localStorage.getItem(key));
+ if(phase===1){assert(d.querySelector('[name=study-group][value="2"]').checked,'Gruppenwahl nach Reload verloren');assert(saved.filename==='LEVIS Stundenplan (1).ics','Kalender nach Reload verloren');pass('Gruppe 2 und Kalender bleiben nach Reload erhalten');document.body.dataset.result='PASS';return;}
+ assert(saved.filename==='LEVIS Stundenplan (1).ics'&&saved.events.length>1&&!saved.events.some(e=>e.title==='WRONG CALENDAR'),'Falscher Kalender wurde nicht ersetzt: '+d.getElementById('message').textContent);
+ pass('Alter Kalender ersetzt: '+saved.events.length+' neue Termine');
+ assert(d.querySelector('[name=study-group][value="1"]').checked,'Gruppe 1 nicht vorausgewählt');
+ const expected=group=>saved.events.filter(e=>{const m=e.title.match(/Gr\.?\s*([12])/i);return !m||m[1]===group;});
+ const total=()=>Number(d.getElementById('semester-total').textContent.match(/(\d+) total events/)[1]);
+ assert(total()===expected('1').length,'Gruppe 1 hat falsche Event-Anzahl');pass('Gruppe 1: '+total()+' Termine einschließlich gemeinsamer Veranstaltungen');
+ const radio=d.querySelector('[name=study-group][value="2"]');radio.click();
+ assert(total()===expected('2').length,'Gruppe 2 hat falsche Event-Anzahl');assert(JSON.parse(w.localStorage.getItem(key)).group==='2','Gruppe nicht gespeichert');
+ const subjects=Object.values(w.Survival.statistics(expected('2').map(e=>w.Survival.classify(e,saved.mappings)),Date.now()).subjects);
+ assert(subjects.length>0,'Keine Fachstatistik');pass('Gruppe 2: '+total()+' Termine, Umschalten aktualisiert Zähler');
+ d.querySelector('[data-view="calendar"]').click();assert(d.getElementById('month-grid').children.length>7,'Kalender nicht gerendert');assert(!d.querySelector('.group-toggle').closest('[hidden]'),'Toggle im Kalender verborgen');pass('Toggle auch im Kalender sichtbar');
+ assert(d.querySelectorAll('#meme-board').length===1,'Doppelte Meme-IDs');assert(d.body.className==='html-style','HTML-Stil fehlt');pass('HTML-Stil und Meme-Ecke erhalten');
+ phase=1;this.src='index.html?reload-test=1';
+}catch(e){output.textContent+='FAIL '+e.message;document.body.dataset.result='FAIL';}};
+document.getElementById('app').src='index.html';
+</script></body></html>

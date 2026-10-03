@@ -1,0 +1,20 @@
+<!doctype html><html lang="de"><meta charset="utf-8"><title>Semester Survival Tests</title><body><h1>Logiktests</h1><pre id="results"></pre><script src="js/subjects.js"></script><script src="js/calendar.js"></script><script src="js/countdown.js"></script><script src="js/statistics.js"></script><script>
+const output=document.getElementById('results');let passed=0,failed=0;
+function test(name,fn){try{fn();passed++;output.textContent+='PASS '+name+'\n';}catch(e){failed++;output.textContent+='FAIL '+name+': '+e.message+'\n';}}
+function equal(a,b){if(a!==b)throw Error(JSON.stringify(a)+' !== '+JSON.stringify(b));}
+const cfg={endDate:'2026-11-01'},ics=body=>'BEGIN:VCALENDAR\r\n'+body+'\r\nEND:VCALENDAR';
+const event=extra=>'BEGIN:VEVENT\r\nUID:one\r\nDTSTART:20261005T130000\r\nDTEND:20261005T143000\r\nSUMMARY:SWC3 VL\r\n'+extra+'\r\nEND:VEVENT';
+test('Lokale Uhrzeit und Fächer',()=>{const e=Survival.parseICS(ics(event('')),cfg).events[0];equal(new Date(e.start).getHours(),13);equal(Survival.classify(e,Survival.mappings).subject,'C++');});
+test('LEVIS Fachcodes mit angehängtem Typ',()=>{equal(Survival.classify({title:'25_SWC3UE_Gr.1',description:''},Survival.mappings).type,'UE');equal(Survival.classify({title:'09_DES3VO (SE.ba)',description:''},Survival.mappings).subject,'DES3');});
+test('Wöchentliche Serie mit Ausnahme',()=>{const r=Survival.parseICS(ics(event('RRULE:FREQ=WEEKLY;BYDAY=MO,WE;COUNT=5\r\nEXDATE:20261007T130000')),cfg);equal(r.events.length,4);equal(new Date(r.events[3].start).getDate(),19);});
+test('Verschobene Instanz',()=>{const r=Survival.parseICS(ics(event('RRULE:FREQ=WEEKLY;COUNT=2')+'\r\nBEGIN:VEVENT\r\nUID:one\r\nRECURRENCE-ID:20261012T130000\r\nDTSTART:20261013T150000\r\nDTEND:20261013T163000\r\nEND:VEVENT'),cfg);equal(r.events.length,2);equal(new Date(r.events[1].start).getDate(),13);});
+test('Zeitzone bleibt über DST korrekt',()=>{const r=Survival.parseICS(ics('BEGIN:VEVENT\r\nUID:dst\r\nDTSTART;TZID=Europe/Berlin:20261019T130000\r\nDTEND;TZID=Europe/Berlin:20261019T140000\r\nRRULE:FREQ=WEEKLY;COUNT=2\r\nEND:VEVENT'),cfg);equal(new Date(r.events[0].start).getUTCHours(),11);equal(new Date(r.events[1].start).getUTCHours(),12);});
+test('UTC, Faltung und Text-Escapes',()=>{const e=Survival.parseICS(ics('BEGIN:VEVENT\r\nDTSTART:20261005T110000Z\r\nDTEND:20261005T120000Z\r\nSUMMARY:Software\r\n Construction VL\r\nDESCRIPTION:Zeile 1\\nZeile 2\\, Test\r\nEND:VEVENT'),cfg).events[0];equal(new Date(e.start).getUTCHours(),11);equal(e.title,'SoftwareConstruction VL');equal(e.description,'Zeile 1\nZeile 2, Test');});
+const day=[{start:new Date(2026,9,5,13).getTime(),end:new Date(2026,9,5,14,30).getTime()},{start:new Date(2026,9,5,17).getTime(),end:new Date(2026,9,5,20,25).getTime()}];
+test('Vor Beginn',()=>{equal(Survival.dayState(day,new Date(2026,9,5,12).getTime()).timer,'01:00:00');});
+test('Start exakt und Pausen zählen',()=>{equal(Survival.dayState(day,day[0].start).timer,'07:25:00');equal(Survival.dayState(day,new Date(2026,9,5,15).getTime()).label,'FREEDOM IN');});
+test('Ende und freier Tag',()=>{equal(Survival.dayState(day,day[1].end).percent,100);equal(Survival.dayState([],Date.now()).label,'NO UNIVERSITY TODAY.');});
+test('Statistik zählt erst bei Endzeit',()=>{const es=day.map(e=>({...e,subject:'C++',type:'VL'}));const r=Survival.statistics(es,day[0].end);equal(r.past,1);equal(r.pastDays,0);equal(r.subjects['C++'].VL.total,2);});
+test('Unbekannte Regeln werden abgewiesen',()=>{let rejected=false;try{Survival.parseICS(ics(event('RRULE:FREQ=MONTHLY;BYDAY=1MO')),cfg);}catch{rejected=true;}equal(rejected,true);});
+output.textContent+='\n'+passed+' bestanden, '+failed+' fehlgeschlagen';document.body.dataset.result=failed?'FAIL':'PASS';
+</script></body></html>
