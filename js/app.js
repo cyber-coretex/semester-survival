@@ -10,7 +10,7 @@
   try{rawEvents=S.parseICS(window.SURVIVAL_BUNDLED_ICS,config).events;}catch(err){$('message').textContent='Der veröffentlichte Kalender konnte nicht geladen werden: '+err.message;}
   let events=[],month=new Date(),selected=S.dateKey(new Date()),view='dashboard';month.setDate(1);
   const money=cents=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(cents/100);
-  function remap(){events=rawEvents.filter(e=>{const match=e.title.match(/Gr\.?\s*([12])/i);return !match||match[1]===group;}).map(e=>S.classify(e,mappings));}
+  function remap(){events=rawEvents.filter(S.isTeachingEvent).filter(e=>{const match=e.title.match(/Gr\.?\s*([12])/i);return !match||match[1]===group;}).map(e=>S.classify(e,mappings));}
   function dayEvents(day){return events.filter(e=>S.dateKey(new Date(e.start))===day);}
   function status(event,now){return event.end<=now?'past':event.start<=now?'active':'future';}
   function eventHTML(list,now){return list.length?list.map(e=>`<div class="event ${status(e,now)}"><span>${e.end<=now?'[x]':e.start<=now?'[&gt;]':'[ ]'}</span><span>${S.time(e.start)}–${S.time(e.end)}</span><div>${S.escape(e.subject)} · ${e.type}<span class="detail">${S.escape(e.title)}${e.location?' · '+S.escape(e.location):''}</span>${e.description?`<details data-event-id="${S.escape(e.id)}"><summary>Beschreibung auf / zu</summary><span class="detail">${S.escape(e.description)}</span></details>`:''}</div></div>`).join(''):'<p>Keine Lehrveranstaltungen. Der Server empfiehlt: existieren.</p>';}

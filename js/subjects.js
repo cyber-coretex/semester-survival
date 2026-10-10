@@ -2,6 +2,11 @@
 window.Survival = {
   defaults: { startDate: '2026-09-10', endDate: '2027-01-31', totalWeeks: 20 },
   mappings: [ {patterns:['SWC3','Software Construction'],subject:'C++'}, {patterns:['MAS3','Mathematik','Mathe'],subject:'Mathematik'}, {patterns:['UX','Usability'],subject:'Usability'} ],
+  isTeachingEvent(event) {
+    // LEVIS also exports administrative grading appointments, including a typo.
+    const text=(event.title+' '+(event.description||'')).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    return !/(?:beu?r?teilungs?\s*findung|noten[\s_-]*(?:findung|feststellung|vergabe)|benotung)/i.test(text);
+  },
   classify(event, mappings) {
     const text = event.title + ' ' + event.description;
     const match = mappings.find(m => m.patterns.some(p => text.toLocaleLowerCase().includes(p.toLocaleLowerCase())));

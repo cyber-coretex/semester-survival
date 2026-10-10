@@ -1,11 +1,14 @@
 'use strict';
 // Owner-maintained shared purchase log. Edit this file and publish the change.
-// Date is optional: Cyber's actual purchase date has not been provided.
+// Purchase dates and prices are maintained by the repository owner.
 window.SURVIVAL_COFFEE = {
   oldDailyPrice: 3.80,
   packGrams: 250,
-  packPrice: 9,
-  purchases: [{ buyer: 'cyber', date: null, packs: 1 }]
+  packPrice: 12,
+  purchases: [
+    { buyer: 'cyber', date: '2026-09-15', packs: 1 },
+    { buyer: 'Phillip', date: '2026-10-07', packs: 1 }
+  ]
 };
 
 Survival.coffeeStatistics = function(events, config, coffee, now) {
