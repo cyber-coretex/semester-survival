@@ -7,7 +7,8 @@ window.SURVIVAL_COFFEE = {
   packPrice: 12,
   purchases: [
     { buyer: 'cyber', date: '2026-09-15', packs: 1 },
-    { buyer: 'Phillip', date: '2026-10-07', packs: 1 }
+    { buyer: 'Phillip', date: '2026-10-07', packs: 1 },
+    { buyer: 'Phillip', date: '2026-10-31', packs: 2 },
   ]
 };
 
